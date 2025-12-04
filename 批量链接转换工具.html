@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>批量链接生成工具（支持参数替换）</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: "Microsoft Yahei", sans-serif;
+        }
+        body {
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 0 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h2 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 25px;
+        }
+        .input-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #555;
+        }
+        textarea, input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            resize: vertical;
+        }
+        textarea {
+            min-height: 120px;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        #output {
+            background-color: #f9f9f9;
+            min-height: 120px;
+        }
+        .tip {
+            color: #888;
+            font-size: 12px;
+            margin-top: 5px;
+        }
+        .warning-tip {
+            color: #ff6b6b;
+            font-size: 12px;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>批量链接生成工具（支持参数替换）</h2>
+        
+        <!-- 数字列表输入框 -->
+        <div class="input-group">
+            <label for="number-list">批量数字列表（每行一个）：</label>
+            <textarea id="number-list" placeholder="请输入批量数字，例如：
+232062
+232059
+232046">232062
+232059
+232046
+231984
+231835
+231819
+231828
+231829
+231832
+231394
+231259
+231251
+231257
+231254
+231255
+231233
+232223
+232188
+232203
+232204
+232173
+231184
+232183
+232139
+232158
+232152
+232131
+232134
+232111
+232124
+232122
+232100
+232052
+232071
+232075</textarea>
+        </div>
+
+        <!-- 基础链接输入框 -->
+        <div class="input-group">
+            <label for="base-url">基础链接：</label>
+            <input type="text" id="base-url" placeholder="请输入基础链接，例如：https://xx.com" value="https://xx.com?a=1&b=2">
+            <div class="tip">提示：如果链接已有相同参数名，会自动替换该参数的值；不同参数名则追加</div>
+        </div>
+
+        <!-- 拼接参数输入框 -->
+        <div class="input-group">
+            <label for="param-name">拼接/替换参数名：</label>
+            <input type="text" id="param-name" placeholder="请输入参数名，例如：id" value="a">
+            <div class="warning-tip">注意：输入的参数名若在基础链接中已存在，会替换其值；不存在则新增</div>
+        </div>
+
+        <!-- 生成按钮 -->
+        <button id="generate-btn">生成批量链接</button>
+
+        <!-- 输出结果 -->
+        <div class="input-group" style="margin-top: 25px;">
+            <label for="output">生成的批量链接（每行一个）：</label>
+            <textarea id="output" readonly placeholder="生成的链接会显示在这里..."></textarea>
+        </div>
+    </div>
+
+    <script>
+        // 获取DOM元素
+        const numberListEl = document.getElementById('number-list');
+        const baseUrlEl = document.getElementById('base-url');
+        const paramNameEl = document.getElementById('param-name');
+        const generateBtn = document.getElementById('generate-btn');
+        const outputEl = document.getElementById('output');
+
+        // 核心函数：修改URL参数（存在则替换，不存在则添加）
+        function updateUrlParam(url, paramName, paramValue) {
+            // 分离URL的锚点部分（#后面的内容）
+            const [urlWithoutHash, hash] = url.split('#');
+            // 分离URL的路径和查询参数
+            const [basePath, queryString] = urlWithoutHash.split('?');
+            
+            // 解析查询参数为对象
+            const params = {};
+            if (queryString) {
+                queryString.split('&').forEach(pair => {
+                    const [key, value] = pair.split('=');
+                    if (key) params[key] = value || '';
+                });
+            }
+
+            // 替换/添加参数
+            params[paramName] = paramValue;
+
+            // 重新拼接查询参数
+            const newQueryString = Object.entries(params)
+                .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+                .join('&');
+
+            // 重新拼接完整URL（包含锚点）
+            let newUrl = basePath;
+            if (newQueryString) newUrl += `?${newQueryString}`;
+            if (hash) newUrl += `#${hash}`;
+
+            return newUrl;
+        }
+
+        // 生成链接的核心函数
+        function generateLinks() {
+            // 获取输入值并处理
+            const numberList = numberListEl.value.trim().split('\n');
+            const baseUrl = baseUrlEl.value.trim();
+            const paramName = paramNameEl.value.trim();
+
+            // 验证输入
+            if (!baseUrl) {
+                alert('请输入基础链接！');
+                return;
+            }
+            if (!paramName) {
+                alert('请输入拼接/替换参数名！');
+                return;
+            }
+            if (numberList.length === 0 || (numberList.length === 1 && numberList[0] === '')) {
+                alert('请输入批量数字列表！');
+                return;
+            }
+
+            // 拼接/替换链接参数
+            const linkList = numberList.map(number => {
+                number = number.trim();
+                if (!number) return ''; // 跳过空行
+                
+                // 使用核心函数处理URL参数
+                return updateUrlParam(baseUrl, paramName, number);
+            }).filter(link => link); // 过滤空行生成的空链接
+
+            // 输出结果
+            outputEl.value = linkList.join('\n');
+            
+            // 自动选中输出内容（方便复制）
+            outputEl.select();
+            // 兼容新版浏览器的复制API
+            navigator.clipboard.writeText(outputEl.value).catch(err => {
+                document.execCommand('copy'); // 降级方案
+            });
+            alert('链接生成成功，已自动复制到剪贴板！');
+        }
+
+        // 绑定按钮点击事件
+        generateBtn.addEventListener('click', generateLinks);
+
+        // 支持回车触发生成（聚焦在按钮时）
+        generateBtn.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') generateLinks();
+        });
+    </script>
+</body>
+</html>
