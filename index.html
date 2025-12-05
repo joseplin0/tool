@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>实用工具集</title>
+    <link rel="stylesheet" href="./assets/css/common.css" />
+    <style>
+      .tool-card {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        margin: 15px 0;
+      }
+      .tool-card a {
+        color: #007bff;
+        text-decoration: none;
+        font-size: 18px;
+        font-weight: 600;
+      }
+      .tool-card a:hover {
+        text-decoration: underline;
+      }
+      .tool-desc {
+        margin-top: 10px;
+        color: #666;
+        font-size: 14px;
+      }
+      .tools-container {
+        margin-top: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>实用工具集</h1>
+      <!-- 工具导航容器（JS动态生成内容） -->
+      <div class="tools-container" id="toolsContainer"></div>
+    </div>
+
+    <!-- 先引入配置文件，再引入生成逻辑 -->
+    <script src="./assets/js/config.js"></script>
+    <script>
+      // 页面加载完成后，循环生成工具导航卡片
+      document.addEventListener("DOMContentLoaded", () => {
+        const toolsContainer = document.getElementById("toolsContainer");
+
+        // 校验配置是否存在
+        if (!TOOLS_CONFIG || TOOLS_CONFIG.length === 0) {
+          toolsContainer.innerHTML =
+            '<p style="color: #e74c3c; text-align: center;">暂无工具配置，请检查 config.js 文件</p>';
+          return;
+        }
+
+        // 循环遍历配置，生成每个工具的卡片
+        TOOLS_CONFIG.forEach((tool) => {
+          // 跳过配置不完整的项（避免报错）
+          if (!tool.name || !tool.url) return;
+
+          // 创建工具卡片DOM
+          const toolCard = document.createElement("div");
+          toolCard.className = "tool-card";
+
+          // 卡片内容（复用原有样式）
+          toolCard.innerHTML = `
+                    <a href="${tool.url}" target="_self">${tool.name}</a>
+                    <p class="tool-desc">${tool.desc || "暂无描述"}</p>
+                `;
+
+          // 添加到容器中
+          toolsContainer.appendChild(toolCard);
+        });
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HTML+SVG 转图片工具</title>
+    <!-- 引入Tailwind CSS（稳定CDN版本） -->
+    <script src="https://cdn.tailwindcss.com/3.4.16"></script>
+    <!-- 核心转换库 -->
+    <script src="https://cdn.jsdelivr.net/npm/dom-to-image@2.6.0/dist/dom-to-image.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    <!-- 代码高亮 -->
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"
+    />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <!-- 代码格式化 -->
+    <script src="https://cdn.jsdelivr.net/npm/prettier@3.2.5/standalone.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prettier@3.2.5/plugins/html.js"></script>
+    <style>
+      /* 自定义滚动条 */
+      ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #ccc;
+        border-radius: 3px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #999;
+      }
+
+      /* pre+code 样式优化 */
+      .code-box {
+        position: relative;
+        height: 100%;
+      }
+      #htmlInput,
+      #codePreview {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        font-family: monospace;
+        font-size: 12px;
+        line-height: 1.5;
+        padding: 1rem;
+        border-radius: 0.5rem;
+      }
+      #htmlInput {
+        opacity: 0;
+        z-index: 2;
+        resize: none;
+        border: 1px solid #e5e7eb;
+      }
+      #codePreview {
+        opacity: 1;
+        z-index: 1;
+        pointer-events: none;
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        overflow: auto;
+      }
+
+      /* 关键修复：预览区样式与转换环境一致 */
+      #previewArea {
+        background: #f9fafb; /* 与转换时的bgcolor一致 */
+        color: #000; /* 确保currentColor有默认值 */
+      }
+      /* 修复SVG在预览区的颜色继承问题 */
+      #previewArea svg {
+        stroke: inherit !important;
+        fill: inherit !important;
+      }
+      /* 预览区内容容器重置，避免样式干扰 */
+      #previewContent {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+      }
+    </style>
+  </head>
+  <body class="bg-gray-50 min-h-screen p-4 md:p-8">
+    <div class="max-w-7xl mx-auto flex flex-col gap-6">
+      <!-- 标题区域 -->
+      <header class="text-center mb-4">
+        <h1 class="text-2xl md:text-3xl font-bold text-gray-800">
+          HTML+SVG 转图片工具
+        </h1>
+        <p class="text-gray-500 mt-2">
+          支持内联SVG、Tailwind CSS的HTML片段转换为PNG/JPG图片
+        </p>
+      </header>
+
+      <!-- 核心功能区：左右分栏 -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- 左侧：输入区（pre+code 简化版） -->
+        <div
+          class="bg-white rounded-lg shadow-sm p-4 h-[600px] flex flex-col gap-4"
+        >
+          <h2 class="text-lg font-semibold text-gray-700">
+            📝 HTML+SVG 代码输入
+          </h2>
+          <div class="flex gap-2 mb-2 flex-wrap">
+            <button
+              id="previewBtn"
+              class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition"
+            >
+              预览代码
+            </button>
+            <button
+              id="formatBtn"
+              class="px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 transition"
+            >
+              格式化代码
+            </button>
+            <button
+              id="clearBtn"
+              class="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition"
+            >
+              清空
+            </button>
+          </div>
+
+          <!-- 核心：pre+code 代码展示 + textarea 输入 -->
+          <div class="code-box relative w-full h-full">
+            <textarea
+              id="htmlInput"
+              placeholder="粘贴包含SVG的HTML代码（支持Tailwind CSS）..."
+            ></textarea>
+            <pre
+              id="codePreview"
+            ><code class="language-html" id="codeContent"></code></pre>
+          </div>
+        </div>
+
+        <!-- 右侧：预览+输出区（重点修复） -->
+        <div
+          class="bg-white rounded-lg shadow-sm p-4 h-[600px] flex flex-col gap-4"
+        >
+          <h2 class="text-lg font-semibold text-gray-700">🖥️ 预览 & 输出</h2>
+
+          <!-- 预览区域（修复样式） -->
+          <div
+            class="flex-1 border border-gray-300 rounded-lg p-0 bg-gray-50 overflow-auto"
+            id="previewArea"
+          >
+            <!-- 新增内容容器，统一渲染上下文 -->
+            <div id="previewContent" class="p-4">
+              <div
+                class="text-gray-500 text-center flex items-center justify-center h-full"
+              >
+                点击「预览代码」查看效果
+              </div>
+            </div>
+          </div>
+
+          <!-- 转换按钮 -->
+          <div class="flex gap-3">
+            <button
+              id="convertPngBtn"
+              class="flex-1 px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition"
+            >
+              转换为 PNG
+            </button>
+            <button
+              id="convertJpgBtn"
+              class="flex-1 px-4 py-2 bg-orange-500 text-white rounded hover:bg-orange-600 transition"
+            >
+              转换为 JPG
+            </button>
+          </div>
+
+          <!-- 输出图片区域 -->
+          <div
+            class="mt-2 border border-gray-300 rounded-lg p-4 bg-gray-50 min-h-[100px] flex items-center justify-center"
+            id="outputArea"
+          >
+            <span class="text-gray-500">转换后的图片将显示在这里</span>
+          </div>
+
+          <!-- 下载按钮（默认隐藏） -->
+          <button
+            id="downloadBtn"
+            class="hidden w-full px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 transition"
+          >
+            下载图片
+          </button>
+        </div>
+      </div>
+
+      <!-- 注意事项 -->
+      <div class="mt-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+        <h3 class="font-semibold text-yellow-800">⚠️ 注意事项</h3>
+        <ul
+          class="mt-2 text-yellow-700 list-disc list-inside space-y-1 text-sm"
+        >
+          <li>
+            仅支持<strong>内联SVG</strong>（直接写在HTML中的SVG），外部引用的SVG可能无法转换
+          </li>
+          <li>
+            转换后的图片尺寸与预览区域内容尺寸一致，可调整HTML代码中的尺寸样式
+          </li>
+          <li>SVG已强制继承颜色，无需手动修改`stroke`/`fill`属性</li>
+          <li>复杂HTML可能转换耗时稍长，请耐心等待</li>
+        </ul>
+      </div>
+    </div>
+
+    <script>
+      // 核心元素获取
+      const htmlInput = document.getElementById("htmlInput");
+      const codeContent = document.getElementById("codeContent");
+      const previewArea = document.getElementById("previewArea");
+      const previewContent = document.getElementById("previewContent"); // 新增内容容器
+      const outputArea = document.getElementById("outputArea");
+      const previewBtn = document.getElementById("previewBtn");
+      const formatBtn = document.getElementById("formatBtn");
+      const clearBtn = document.getElementById("clearBtn");
+      const convertPngBtn = document.getElementById("convertPngBtn");
+      const convertJpgBtn = document.getElementById("convertJpgBtn");
+      const downloadBtn = document.getElementById("downloadBtn");
+
+      // 预设示例代码（修复SVG颜色，替换currentColor为具体值）
+      const defaultCode = `<!-- 预设示例代码 -->
+<div class="flex flex-col gap-8 p-8">
+  <!-- Layer 1: Cloud/Core -->
+  <div class="flex items-center justify-center gap-8">
+    <div class="flex flex-col items-center gap-2">
+      <div class="w-16 h-16 bg-blue-100 rounded-xl flex items-center justify-center">
+        <svg class="w-8 h-8" fill="none" stroke="#2563eb" viewBox="0 0 24 24">
+          <path 
+            stroke-linecap="round" 
+            stroke-linejoin="round" 
+            stroke-width="2" 
+            d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"
+          ></path>
+        </svg>
+      </div>
+      <span class="text-xs font-medium">运营商核心网</span>
+    </div>
+    <div class="w-16 h-px bg-gray-300"></div>
+    <div class="flex flex-col items-center gap-2">
+      <div class="w-16 h-16 bg-indigo-100 rounded-xl flex items-center justify-center">
+        <svg class="w-8 h-8" fill="none" stroke="#4f46e5" viewBox="0 0 24 24">
+          <path 
+            stroke-linecap="round" 
+            stroke-linejoin="round" 
+            stroke-width="2" 
+            d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"
+          ></path>
+        </svg>
+      </div>
+      <span class="text-xs font-medium">5G核心网(5GC)</span>
+    </div>
+  </div>
+</div>`;
+
+      // 初始化：设置默认代码 + 同步到pre+code
+      htmlInput.value = defaultCode;
+      syncCode();
+
+      // 1. 同步textarea内容到pre+code并高亮
+      function syncCode() {
+        codeContent.textContent = htmlInput.value;
+        hljs.highlightElement(codeContent);
+      }
+
+      // 2. 格式化代码
+      function formatHtmlCode() {
+        try {
+          const unformatted = htmlInput.value.trim();
+          if (!unformatted) return;
+
+          const formatted = prettier.format(unformatted, {
+            parser: "html",
+            htmlWhitespaceSensitivity: "ignore",
+            tabWidth: 2,
+            useTabs: false,
+            printWidth: 100,
+          });
+
+          htmlInput.value = formatted;
+          syncCode();
+        } catch (e) {
+          alert(`格式化失败：${e.message}`);
+        }
+      }
+
+      // 3. 绑定事件
+      // 输入同步
+      htmlInput.addEventListener("input", syncCode);
+      // 格式化按钮
+      formatBtn.addEventListener("click", formatHtmlCode);
+      // 预览代码（核心修复：渲染到独立容器，保证样式上下文）
+      previewBtn.addEventListener("click", () => {
+        try {
+          const inputCode = htmlInput.value.trim();
+          // 渲染到独立的内容容器，避免预览区样式干扰
+          previewContent.innerHTML =
+            inputCode ||
+            '<div class="text-gray-500 text-center">无预览内容</div>';
+
+          // 强制重绘预览区，确保样式生效
+          previewArea.style.display = "none";
+          previewArea.offsetHeight; // 触发重绘
+          previewArea.style.display = "block";
+        } catch (e) {
+          previewContent.innerHTML = `<div class="text-red-500 text-center">预览失败：${e.message}</div>`;
+          console.error("预览错误详情：", e);
+        }
+      });
+      // 清空
+      clearBtn.addEventListener("click", () => {
+        htmlInput.value = "";
+        syncCode();
+        previewContent.innerHTML =
+          '<div class="text-gray-500 text-center flex items-center justify-center h-full">点击「预览代码」查看效果</div>';
+        outputArea.innerHTML =
+          '<span class="text-gray-500">转换后的图片将显示在这里</span>';
+        downloadBtn.classList.add("hidden");
+      });
+
+      // 4. 转换图片（修改目标节点为previewContent，与预览一致）
+      async function convertToImage(format = "png") {
+        try {
+          convertPngBtn.disabled = true;
+          convertJpgBtn.disabled = true;
+          outputArea.innerHTML =
+            '<div class="text-gray-500">正在转换，请稍候...</div>';
+
+          // 关键：转换previewContent（预览的实际内容），而非previewArea
+          const targetNode = previewContent;
+          let imageUrl;
+          if (format === "png") {
+            imageUrl = await domtoimage.toPng(targetNode, {
+              quality: 1.0,
+              bgcolor: "#f9fafb",
+            });
+          } else {
+            imageUrl = await domtoimage.toJpeg(targetNode, {
+              quality: 0.95,
+              bgcolor: "#f9fafb",
+            });
+          }
+
+          outputArea.innerHTML = `<img src="${imageUrl}" alt="转换后的图片" class="max-w-full max-h-[300px] object-contain" />`;
+          downloadBtn.dataset.imageUrl = imageUrl;
+          downloadBtn.dataset.format = format;
+          downloadBtn.classList.remove("hidden");
+        } catch (e) {
+          outputArea.innerHTML = `<div class="text-red-500">转换失败：${e.message}</div>`;
+          console.error("转换错误详情：", e);
+        } finally {
+          convertPngBtn.disabled = false;
+          convertJpgBtn.disabled = false;
+        }
+      }
+
+      // 转换按钮绑定
+      convertPngBtn.addEventListener("click", () => convertToImage("png"));
+      convertJpgBtn.addEventListener("click", () => convertToImage("jpg"));
+
+      // 下载图片
+      downloadBtn.addEventListener("click", () => {
+        const imageUrl = downloadBtn.dataset.imageUrl;
+        const format = downloadBtn.dataset.format;
+        if (!imageUrl) return;
+
+        const link = document.createElement("a");
+        link.href = imageUrl;
+        link.download = `html-svg-converted-${new Date().getTime()}.${format}`;
+        link.click();
+        URL.revokeObjectURL(link.href);
+      });
+
+      // 初始化预览
+      window.addEventListener("load", () => {
+        previewBtn.click();
+      });
+    </script>
+  </body>
+</html>
